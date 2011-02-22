@@ -192,12 +192,6 @@ public class MulticastQueueImpl<E extends Serializable> extends Thread
         sendq.shutdown();
     }
 
-    private static class Echoer extends Thread {
-        MulticastQueueImpl<String> queue;
-        public Echoer(MulticastQueueImpl queue) { this.queue = queue; start(); }
-        public void run() { while (true) { String msg = queue.poll(); if (msg == null) return; System.out.println(msg); } }
-    }
-
     public static void main(String... args) throws Exception {
         if (args.length < 1 || args.length > 3) {
             System.err.println("Usage: ./command port [knownPeerIP [portToUse]]");
