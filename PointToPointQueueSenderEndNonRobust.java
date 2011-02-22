@@ -14,6 +14,21 @@ import java.net.*;
  */
 
 public class PointToPointQueueSenderEndNonRobust<E extends Serializable> extends Thread implements PointToPointQueueSenderEnd<E>  {
+	/*
+	 * The address of the receiving end of the queue.
+	 */
+	private InetSocketAddress receiverAddress;
+	
+	/*
+	 * The objects not yet delivered.
+	 */
+	final private ConcurrentLinkedQueue<E> pendingObjects; 
+	
+	/*
+	 * Used to signal that the queue should shut down.
+	 */
+	private boolean shutdown = false;
+	private boolean running;
 
 	/**
 	 * 
@@ -28,7 +43,10 @@ public class PointToPointQueueSenderEndNonRobust<E extends Serializable> extends
 	 * @param serverAddress The IP address and port of the receiver end.
 	 */
 	public void setReceiver(InetSocketAddress serverAddress) {
-		if (this.receiverAddress==null && serverAddress!=null) {
+		if (serverAddress!=null) {
+			if (running) {
+				shutdown();
+			}
 			this.receiverAddress = serverAddress;
 			this.start();
 		}
@@ -65,6 +83,7 @@ public class PointToPointQueueSenderEndNonRobust<E extends Serializable> extends
 	 * when no objects are pending!
 	 */
 	public void shutdown() {
+		/* TODO: Signal running thread to stop. */
 		synchronized (pendingObjects) {
 			shutdown = true;
 			pendingObjects.notifyAll();
@@ -81,20 +100,6 @@ public class PointToPointQueueSenderEndNonRobust<E extends Serializable> extends
 		}
 	}
 	
-	/*
-	 * The address of the receiving end of the queue.
-	 */
-	private InetSocketAddress receiverAddress;
-	
-	/*
-	 * The objects not yet delivered.
-	 */
-	final private ConcurrentLinkedQueue<E> pendingObjects; 
-	
-	/*
-	 * Used to signal that the queue should shut down.
-	 */
-	private boolean shutdown = false;
 
 	/**
 	 * 
@@ -130,6 +135,8 @@ public class PointToPointQueueSenderEndNonRobust<E extends Serializable> extends
 			return false;
 		}
 		try {
+			/* TODO: Pak object ind i en klasse der også indeholder
+			 * socket.getRemoteSocketAddress() */
 			forSendingObjects.writeObject(object); 
 		} catch (IOException e) {
 			System.err.println("Could not push object to host " + receiverAddress);
@@ -155,6 +162,7 @@ public class PointToPointQueueSenderEndNonRobust<E extends Serializable> extends
 	 * pending to be pushed. 
 	 */
  	private void waitForObjectsToBePendingOrShutdown() {
+		/* TODO: Signalling and stuff */
  		synchronized (pendingObjects) {
  			while (pendingObjects.isEmpty() && !shutdown) {
  				try {
@@ -175,29 +183,31 @@ public class PointToPointQueueSenderEndNonRobust<E extends Serializable> extends
  	 * Starts a thread which pushes objects in this queue to the receiver side.
  	 */
 	public void run() {
-
+		/* TODO: Signalling and stuff */
+		running = true;
 		while (!shutdown) {
 			waitForObjectsToBePendingOrShutdown(); 
 			if (!shutdown) {
 				/*
-				 * We might have come out of waitForObjectsToBePendingOrShutdown() 
-				 * because of a shutdown. If not, then a message is ready to be sent.
+				 * We might have come out of
+				 * waitForObjectsToBePendingOrShutdown()
+				 * because of a shutdown. If not, then a
+				 * message is ready to be sent.
 				 */
 				pushOneObject();
 			}
 		}
 		
-		/*
-		 * We are shutting down. Will try to send the remaining messages.
-		 * However, on the first delivery error, I will terminate. Here we go.
-		 */
-		boolean allOkSoFar = true;
-		while (!pendingObjects.isEmpty() && allOkSoFar) {
-			allOkSoFar = pushOneObject();
-		}
+		// boolean allOkSoFar = true;
+		// while (!pendingObjects.isEmpty() && allOkSoFar) {
+		// 	allOkSoFar = pushOneObject();
+		// }
 
 		if (!pendingObjects.isEmpty()) {
-			System.err.println("Warning: PointToPointQueueSendingEnd shutting down with " + pendingObjects.size() + " pending messages.");
+			System.err.printf("Warning: PointToPointQueueSendingEnd"
+					+"shutting down with %d pending"
+					+"messages.",
+					pendingObjects.size());
 		}
 	}
 }
