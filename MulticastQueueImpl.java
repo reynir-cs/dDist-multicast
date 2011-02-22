@@ -150,9 +150,6 @@ public class MulticastQueueImpl<E extends Serializable> extends Thread
                     break;
                 case SET_NEXT:
                     next = msg.getPeerData();
-                    sendQueue.shutdown();
-                    sendQueue = 
-                        new PointToPointQueueSenderEndNonRobust<Message<E>>();
                     sendQueue.setReceiver(next);
                     break;
                 case DATA:

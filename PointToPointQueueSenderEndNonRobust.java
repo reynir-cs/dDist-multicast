@@ -16,7 +16,7 @@ import java.util.ArrayList;
  *
  */
 
-public class PointToPointQueueSenderEndNonRobust<E extends Serializable> extends Thread implements PointToPointQueueSenderEnd<E>  {
+public class PointToPointQueueSenderEndNonRobust<E extends Serializable> implements PointToPointQueueSenderEnd<E>, Runnable  {
 	/*
 	 * The address of the receiving end of the queue.
 	 */
@@ -24,6 +24,8 @@ public class PointToPointQueueSenderEndNonRobust<E extends Serializable> extends
 
         /* TODO: List of listeners */
         private List<SendFaultListener> listeners;
+
+        private Thread currThread;
 	
 	/*
 	 * The objects not yet delivered.
@@ -56,7 +58,8 @@ public class PointToPointQueueSenderEndNonRobust<E extends Serializable> extends
 				shutdown();
 			}
 			this.receiverAddress = serverAddress;
-			this.start();
+                        currThread = new Thread(this);
+                        currThread.start();
 		}
 	}
 	
@@ -96,7 +99,7 @@ public class PointToPointQueueSenderEndNonRobust<E extends Serializable> extends
                 synchronized (pendingObjects) {
 			pendingObjects.notifyAll();
                 }
-                interrupt();
+                currThread.interrupt();
                 try {
                         isShutdown.acquire();
                 } catch(InterruptedException e) {}
