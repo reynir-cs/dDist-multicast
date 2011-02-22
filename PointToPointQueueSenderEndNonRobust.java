@@ -1,6 +1,9 @@
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.Semaphore;
 import java.io.*;
 import java.net.*;
+import java.util.List;
+import java.util.ArrayList;
 
 /**
  *
@@ -20,6 +23,7 @@ public class PointToPointQueueSenderEndNonRobust<E extends Serializable> extends
 	private InetSocketAddress receiverAddress;
 
         /* TODO: List of listeners */
+        private List<SendFaultListener> listeners;
 	
 	/*
 	 * The objects not yet delivered.
@@ -31,6 +35,7 @@ public class PointToPointQueueSenderEndNonRobust<E extends Serializable> extends
 	 */
 	private boolean shutdown = false;
 	private boolean running;
+        private Semaphore isShutdown = new Semaphore(0);
 
 	/**
 	 * 
@@ -38,6 +43,7 @@ public class PointToPointQueueSenderEndNonRobust<E extends Serializable> extends
 	 */
 	public PointToPointQueueSenderEndNonRobust() {
 		this.pendingObjects = new ConcurrentLinkedQueue<E>();
+                listeners = new ArrayList<SendFaultListener>();
 	}
 
 	/**
@@ -86,10 +92,14 @@ public class PointToPointQueueSenderEndNonRobust<E extends Serializable> extends
 	 */
 	public void shutdown() {
 		/* TODO: Signal running thread to stop. */
-		synchronized (pendingObjects) {
-			shutdown = true;
+                shutdown = true;
+                synchronized (pendingObjects) {
 			pendingObjects.notifyAll();
-		}
+                }
+                interrupt();
+                try {
+                        isShutdown.acquire();
+                } catch(InterruptedException e) {}
 	}
 
 	/**
@@ -115,7 +125,7 @@ public class PointToPointQueueSenderEndNonRobust<E extends Serializable> extends
 	 * @return whether an object was transfered to the receiver end of the queue
 	 */
 	private boolean pushOneObject() {
-		if (receiverAddress==null) {
+		if (receiverAddress==null) { // This should be impossible
 			return false;
 		}
 		E object = pendingObjects.peek();
@@ -125,8 +135,10 @@ public class PointToPointQueueSenderEndNonRobust<E extends Serializable> extends
 		Socket socket = null;
 		ObjectOutputStream forSendingObjects = null;		
 		try {
-			socket = new Socket(receiverAddress.getAddress(),receiverAddress.getPort());
-			forSendingObjects = new ObjectOutputStream(socket.getOutputStream());
+			socket = new Socket(receiverAddress.getAddress(),
+                                        receiverAddress.getPort());
+			forSendingObjects = 
+                                new ObjectOutputStream(socket.getOutputStream());
 		} catch (UnknownHostException e) {
 			System.err.println("Problems looking up " + receiverAddress);
 			System.err.println(e);
@@ -137,8 +149,6 @@ public class PointToPointQueueSenderEndNonRobust<E extends Serializable> extends
 			return false;
 		}
 		try {
-			/* TODO: Pak object ind i en klasse der også indeholder
-			 * socket.getRemoteSocketAddress() */
 			forSendingObjects.writeObject(object); 
 		} catch (IOException e) {
 			System.err.println("Could not push object to host " + receiverAddress);
@@ -163,23 +173,20 @@ public class PointToPointQueueSenderEndNonRobust<E extends Serializable> extends
 	 * Internal method for waiting until one or more objects are
 	 * pending to be pushed. 
 	 */
- 	private void waitForObjectsToBePendingOrShutdown() {
-		/* TODO: Signalling and stuff */
- 		synchronized (pendingObjects) {
- 			while (pendingObjects.isEmpty() && !shutdown) {
- 				try {
- 					/*
- 					 * The put method will wake us up if messages arrive.
- 					 * The shutdown method will wake us up if we are to shut down.
- 					 */
- 					pendingObjects.wait();
- 				} catch (InterruptedException e) {
- 					// Ignore. The while condition ensures proper behavior in case of interrupts.
- 				}
- 			}
- 			// Now objects are pending send or we are shutting down
- 		}
- 	}
+        private void waitForObjectsToBePendingOrShutdown() {
+                /* TODO: Signalling and stuff */
+                synchronized (pendingObjects) {
+                        try {
+                                while (pendingObjects.isEmpty() &&
+                                                !Thread.currentThread().isInterrupted())
+                                {
+                                        pendingObjects.wait();
+                                }
+                        } catch(InterruptedException ignore) {
+                                // Will be handled by caller
+                        }
+                }
+        }
 	
  	/**
  	 * Starts a thread which pushes objects in this queue to the receiver side.
@@ -187,23 +194,21 @@ public class PointToPointQueueSenderEndNonRobust<E extends Serializable> extends
 	public void run() {
 		/* TODO: Signalling and stuff */
 		running = true;
-		while (!shutdown) {
+
+		while (!Thread.currentThread().isInterrupted()) {
 			waitForObjectsToBePendingOrShutdown(); 
-			if (!shutdown) {
-				/*
-				 * We might have come out of
-				 * waitForObjectsToBePendingOrShutdown()
-				 * because of a shutdown. If not, then a
-				 * message is ready to be sent.
-				 */
+			if (!Thread.currentThread().isInterrupted()) {
 				pushOneObject();
 			}
 		}
 		
-		// boolean allOkSoFar = true;
-		// while (!pendingObjects.isEmpty() && allOkSoFar) {
-		// 	allOkSoFar = pushOneObject();
-		// }
+                /* Send the rest of the messages */
+                if (shutdown) {
+                        boolean allOkSoFar = true;
+                        while (!pendingObjects.isEmpty() && allOkSoFar) {
+                                allOkSoFar = pushOneObject();
+                        }
+                }
 
 		if (!pendingObjects.isEmpty()) {
 			System.err.printf("Warning: PointToPointQueueSendingEnd"
@@ -211,5 +216,10 @@ public class PointToPointQueueSenderEndNonRobust<E extends Serializable> extends
 					+"messages.",
 					pendingObjects.size());
 		}
+                isShutdown.release();
 	}
+
+        public void subscribe(SendFaultListener listener) {
+                listeners.add(listener);
+        }
 }
