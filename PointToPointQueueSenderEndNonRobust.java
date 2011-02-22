@@ -18,6 +18,8 @@ public class PointToPointQueueSenderEndNonRobust<E extends Serializable> extends
 	 * The address of the receiving end of the queue.
 	 */
 	private InetSocketAddress receiverAddress;
+
+        /* TODO: List of listeners */
 	
 	/*
 	 * The objects not yet delivered.
