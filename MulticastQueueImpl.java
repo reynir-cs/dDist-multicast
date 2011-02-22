@@ -101,44 +101,40 @@ public class MulticastQueueImpl<E extends Serializable> extends Thread
 
         // The mesage is from us
         if (msg.getPeer().equals(thisPeer)) {
-            if (!msg.isAck()) {
-                msg.setIsAck(true);
-                sendQueue.put(msg);
-            } // else ignore our own ack
+            sendQueue.put(msg.makeAck());
         } else { // Not from us
-            if (msg.isAck()) { // Ack from someone else
-                try {
-                    Message<E> ackedMsg = msgQueue.take();
-                    if (!msg.hasAck(ackedMsg)) { // This should never happen.
-                        System.out.println("AckedMsg: "+ackedMsg);
-                        System.out.println("AckMsg: "+msg);
-                        throw new RuntimeException("Invarianten er brudt!11");
-                    }
-                    System.out.println("** dataQueue.put(): "+ackedMsg);
-                    dataQueue.put(ackedMsg.getData());
-                } catch(InterruptedException e) {
-                    System.err.println(e);
-                }
-            } else { // neither ack nor from self
-                try {
-                    System.out.println("** msgQueue.put(): "+msg);
-                    msgQueue.put(msg);
-                } catch(InterruptedException ex) {
-                    throw new RuntimeException("DataQueue interrupted in put"
-                            +"with message: " + ex.getMessage());
-                }
+            try {
+                msgQueue.put(msg);
+            } catch(InterruptedException ex) {
+                throw new RuntimeException("DataQueue interrupted in put"
+                        +"with message: " + ex.getMessage());
             }
             // Pass it on if not from self
             sendQueue.put(msg);
         }
     }
 
+    public void handleAck(Message<E> msg) {
+        if (msg.getPeer().equals(thisPeer)) 
+            return;
+        try {
+            Message<E> ackedMsg = msgQueue.take();
+            if (!msg.hasAck(ackedMsg)) { // This should never happen.
+                throw new RuntimeException("Invarianten er brudt!11");
+            }
+            dataQueue.put(ackedMsg.getData());
+        } catch(InterruptedException e) {
+            System.err.println(e);
+        }
+        sendQueue.put(msg); // Pass it on if not from self
+    }
+
+
     public void run() {
         while (!dead) {
             Message<E> msg = recvQueue.poll();
             if (msg == null)
                 return;
-            System.out.println("RUN: "+msg);
             switch(msg.getType()){
                 case GET_PREV:
                     PointToPointQueueSenderEnd<Message<E>> sendq = 
@@ -161,6 +157,9 @@ public class MulticastQueueImpl<E extends Serializable> extends Thread
                     break;
                 case DATA:
                     handleData(msg);
+                    break;
+                case ACK:
+                    handleAck(msg);
                     break;
                 default:
                     throw new RuntimeException("Wrong message type: "
