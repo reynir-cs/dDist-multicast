@@ -42,12 +42,12 @@ public interface PointToPointQueueSenderEnd<E extends Serializable> extends Runn
 	/**
 	 * 
 	 * @return Whether all objects have been delivered to the receiving end.
-	 */
-	boolean isEmpty();
+	 */ boolean isEmpty();
 	
  	/**
  	 * Starts the thread manager which pushes objects to the queue of the receiving end.
  	 */
 	public void run();
 	
+        // public void subscribe(SendFaultListener listener);
 }

@@ -12,7 +12,7 @@ import java.util.Queue;
 import java.util.Random;
 
 public class MulticastQueueImpl<E extends Serializable> extends Thread
-        implements MulticastQueue<E> {
+        implements SendFaultListener, MulticastQueue<E> {
     private InetSocketAddress next, prev, thisPeer;
     private DeliveryGuarantee deliveryGuarantee;
     private PointToPointQueueReceiverEnd<Message<E>> recvQueue;
@@ -28,7 +28,7 @@ public class MulticastQueueImpl<E extends Serializable> extends Thread
     }
 
     public MulticastQueueImpl(Integer port) {
-        sendQueue = new PointToPointQueueSenderEndNonRobust<Message<E>>();
+        sendQueue = new PointToPointQueueSenderEndNonRobust<Message<E>>(this);
         recvQueue = new PointToPointQueueReceiverEndNonRobust<Message<E>>();
         msgQueue = new PriorityBlockingQueue<Message<E>>();
         dataQueue = new LinkedBlockingQueue<E>();
@@ -187,6 +187,17 @@ public class MulticastQueueImpl<E extends Serializable> extends Thread
         Message<E> msg = new Message<E>(who, Message.Type.SET_NEXT, what);
         sendq.put(msg);
         sendq.shutdown();
+    }
+
+    /* Not yet implemented :) */
+    public void callBack(PointToPointQueueReceiverEnd q) {
+            System.out.println("Got a receiver callback!");
+    }
+
+    public void callBack(PointToPointQueueSenderEnd q) {
+            System.out.println("Got a sender callback!");
+            System.out.println("Making the ring a black hole :(");
+            sendQueue.shutdown();
     }
 
     public static void main(String... args) throws Exception {

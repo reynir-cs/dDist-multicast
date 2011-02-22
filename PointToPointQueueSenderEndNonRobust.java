@@ -44,9 +44,15 @@ public class PointToPointQueueSenderEndNonRobust<E extends Serializable> impleme
 	 * @param serverAddress The IP address and port of the receiver
 	 */
 	public PointToPointQueueSenderEndNonRobust() {
+                this(null);
+	}
+
+        public PointToPointQueueSenderEndNonRobust(SendFaultListener listener) {
 		this.pendingObjects = new ConcurrentLinkedQueue<E>();
                 listeners = new ArrayList<SendFaultListener>();
-	}
+                if (listener != null)
+                        subscribe(listener);
+        }
 
 	/**
 	 * 
@@ -145,10 +151,12 @@ public class PointToPointQueueSenderEndNonRobust<E extends Serializable> impleme
 		} catch (UnknownHostException e) {
 			System.err.println("Problems looking up " + receiverAddress);
 			System.err.println(e);
+                        callback();
 			return false;
 		} catch (IOException e) {
 			System.err.println("Problems opening socket to " + receiverAddress);
 			System.err.println(e);
+                        callback();
 			return false;
 		}
 		try {
@@ -156,6 +164,7 @@ public class PointToPointQueueSenderEndNonRobust<E extends Serializable> impleme
 		} catch (IOException e) {
 			System.err.println("Could not push object to host " + receiverAddress);
 			System.err.println(e);
+                        callback();
 			return false;
 		} finally {
 			try {
@@ -224,5 +233,11 @@ public class PointToPointQueueSenderEndNonRobust<E extends Serializable> impleme
 
         public void subscribe(SendFaultListener listener) {
                 listeners.add(listener);
+        }
+        
+        private void callback() {
+                for (SendFaultListener l : listeners) {
+                        l.callBack(this);
+                }
         }
 }
