@@ -82,43 +82,6 @@ public class MulticastQueueImpl<E extends Serializable> extends Thread
         }catch(InterruptedException e) {
             return null;
         }
-        /** This is garbage!!1one
-        while (!dead) {
-            Message<E> msg, ack;
-            try {
-                msg = msgQueue.peek();
-                if (msg == null) {
-                    wait();
-                    continue;
-                }
-                msgQueue.remove();
-                ack = msgQueue.peek();
-                if (ack == null) {
-                    msgQueue.put(msg);
-                    wait();
-                    continue;
-                }
-                msgQueue.remove();
-            } catch (InterruptedException ex) {
-                throw new RuntimeException("DataQueue interrupted with message: "
-                        + ex.getMessage());
-            }
-
-            if (msg.hasAck(ack))
-                return msg.getData();
-            try {
-                msgQueue.put(msg);
-                msgQueue.put(ack);
-            } catch (InterruptedException ex) {
-                throw new RuntimeException("Unable to put to msgQueue");
-            }
-            try {
-                this.wait();
-            } catch (InterruptedException ex) {
-                throw new RuntimeException("this.wait() interrupted");
-            }
-        }
-        */
     }
 
     public void leaveGroup() {
@@ -135,14 +98,6 @@ public class MulticastQueueImpl<E extends Serializable> extends Thread
 
     private void handleData(Message<E> msg) {
         counter = Math.max(msg.getTimestamp(), counter) + 1;
-        if (!msg.isAck()) {
-            try {
-                msgQueue.put(msg);
-            } catch(InterruptedException ex) {
-                throw new RuntimeException("DataQueue interrupted in put"
-                        +"with message: " + ex.getMessage());
-            }
-        }
 
         // The mesage is from us
         if (msg.getPeer().equals(thisPeer)) {
@@ -150,18 +105,30 @@ public class MulticastQueueImpl<E extends Serializable> extends Thread
                 msg.setIsAck(true);
                 sendQueue.put(msg);
             } // else ignore our own ack
-        } else {
-            if (msg.isAck()) {
+        } else { // Not from us
+            if (msg.isAck()) { // Ack from someone else
                 try {
                     Message<E> ackedMsg = msgQueue.take();
                     if (!msg.hasAck(ackedMsg)) { // This should never happen.
+                        System.out.println("AckedMsg: "+ackedMsg);
+                        System.out.println("AckMsg: "+msg);
                         throw new RuntimeException("Invarianten er brudt!11");
                     }
+                    System.out.println("** dataQueue.put(): "+ackedMsg);
                     dataQueue.put(ackedMsg.getData());
                 } catch(InterruptedException e) {
                     System.err.println(e);
                 }
+            } else { // neither ack nor from self
+                try {
+                    System.out.println("** msgQueue.put(): "+msg);
+                    msgQueue.put(msg);
+                } catch(InterruptedException ex) {
+                    throw new RuntimeException("DataQueue interrupted in put"
+                            +"with message: " + ex.getMessage());
+                }
             }
+            // Pass it on if not from self
             sendQueue.put(msg);
         }
     }
@@ -171,6 +138,7 @@ public class MulticastQueueImpl<E extends Serializable> extends Thread
             Message<E> msg = recvQueue.poll();
             if (msg == null)
                 return;
+            System.out.println("RUN: "+msg);
             switch(msg.getType()){
                 case GET_PREV:
                     PointToPointQueueSenderEnd<Message<E>> sendq = 

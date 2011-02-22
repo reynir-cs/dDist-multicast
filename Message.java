@@ -45,7 +45,7 @@ public class Message<E extends Serializable> implements Serializable, Comparable
     }
 
     public String toString() {
-	return "[Message:[peer=" + peer + ",type=" + type +",data=" + data + ",peerData=" + peerData +",timestamp="+timestamp+",isAck="+isAck+"]]";
+	return "Message:[peer=" + peer + ",type=" + type +",data=" + data + ",peerData=" + peerData +",timestamp="+timestamp+",isAck="+isAck+"]";
     }
 
     public void setTimestamp(long val) {
