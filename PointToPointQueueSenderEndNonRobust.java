@@ -37,7 +37,6 @@ public class PointToPointQueueSenderEndNonRobust<E extends Serializable> impleme
 	 */
 	private boolean shutdown = false;
 	private boolean running;
-        private Semaphore isShutdown = new Semaphore(0);
 
 	/**
 	 * 
@@ -61,7 +60,7 @@ public class PointToPointQueueSenderEndNonRobust<E extends Serializable> impleme
 	public void setReceiver(InetSocketAddress serverAddress) {
 		if (serverAddress!=null) {
 			if (running) {
-				shutdown();
+				niceShutdown();
 			}
 			this.receiverAddress = serverAddress;
                         currThread = new Thread(this);
@@ -105,11 +104,14 @@ public class PointToPointQueueSenderEndNonRobust<E extends Serializable> impleme
                 synchronized (pendingObjects) {
 			pendingObjects.notifyAll();
                 }
-                currThread.interrupt();
-                try {
-                        isShutdown.acquire();
-                } catch(InterruptedException e) {}
+                niceShutdown();
 	}
+
+        private void niceShutdown() {
+                currThread.interrupt();
+        }
+
+
 
 	/**
 	 * 
@@ -196,6 +198,7 @@ public class PointToPointQueueSenderEndNonRobust<E extends Serializable> impleme
                                 }
                         } catch(InterruptedException ignore) {
                                 // Will be handled by caller
+                                Thread.currentThread().interrupt();
                         }
                 }
         }
@@ -206,6 +209,10 @@ public class PointToPointQueueSenderEndNonRobust<E extends Serializable> impleme
 	public void run() {
 		/* TODO: Signalling and stuff */
 		running = true;
+                if (currThread != Thread.currentThread()) {
+                        System.err.println("currThread != Thread.currentThread()");
+                        currThread = Thread.currentThread();
+                }
 
 		while (!Thread.currentThread().isInterrupted()) {
 			waitForObjectsToBePendingOrShutdown(); 
@@ -223,12 +230,12 @@ public class PointToPointQueueSenderEndNonRobust<E extends Serializable> impleme
                 }
 
 		if (!pendingObjects.isEmpty()) {
-			System.err.printf("Warning: PointToPointQueueSendingEnd"
-					+"shutting down with %d pending"
+			System.err.printf("Warning: PointToPointQueueSendingEnd "
+					+"shutting down with %d pending "
 					+"messages.",
 					pendingObjects.size());
 		}
-                isShutdown.release();
+                running = false;
 	}
 
         public void subscribe(SendFaultListener listener) {

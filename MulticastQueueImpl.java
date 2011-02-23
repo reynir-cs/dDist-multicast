@@ -198,6 +198,7 @@ public class MulticastQueueImpl<E extends Serializable> extends Thread
             System.out.println("Got a sender callback!");
             System.out.println("Making the ring a black hole :(");
             sendQueue.shutdown();
+            System.out.println("Shut down the sender");
     }
 
     public static void main(String... args) throws Exception {
